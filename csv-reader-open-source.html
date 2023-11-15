@@ -1,0 +1,252 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CSV Data Chart</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+
+            // Add event listeners for time series toggle
+    document.querySelectorAll('input[name="timeSeriesToggle"]').forEach(radio => {
+        radio.addEventListener('change', () => updateChart(window.csvData));
+    });
+
+    // Step 1: Read the CSV file
+    fetch('sample.csv')
+        .then(response => response.text())
+        .then(csvText => processCSVData(csvText));
+
+            const processData = (data) => {
+
+            // Extract unique values from column 2
+            const uniqueValuesCol2 = [...new Set(data.map(row => row[1]))];
+            // Extract unique values from column 3
+            const uniqueValuesCol3 = [...new Set(data.map(row => row[2]))];
+            // Extract unique values from column 3
+            const uniqueValuesCol4 = [...new Set(data.map(row => row[3]))];
+
+            // Create checkboxes for column 2
+            uniqueValuesCol2.forEach(value => createCheckbox(value, data, "col2"));
+            // Create checkboxes for column 3
+            uniqueValuesCol3.forEach(value => createCheckbox(value, data, "col3"));
+            // Create checkboxes for column 4
+            uniqueValuesCol4.forEach(value => createCheckbox(value, data, "col4"));
+
+
+            // Initialize chart with unique values from column 2
+            initChart(uniqueValuesCol2, data);
+
+            // Initialize line chart with data
+            // Assuming we want to start with yearly data; modify as needed
+            const aggregatedData = aggregateDataByTime(data, 'year');
+            initLineChart(aggregatedData);
+        };
+
+        const createCheckbox = (value, data, column) => {
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.id = `${column}-${value}`;
+            checkbox.checked = true;
+            checkbox.addEventListener('change', () => updateChart(data));
+            document.body.appendChild(checkbox);
+
+            const label = document.createElement('label');
+            label.htmlFor = `${column}-${value}`;
+            label.appendChild(document.createTextNode(value));
+            document.body.appendChild(label);
+        };
+
+        const isCheckboxChecked = (value, column) => {
+            const checkboxId = `${column}-${value}`;
+            const checkbox = document.getElementById(checkboxId);
+            return checkbox ? checkbox.checked : true;
+        };
+            // Initialize Bar Chart
+            const initChart = (uniqueValues, data) => {
+                const ctx = document.getElementById('myChart').getContext('2d');
+                window.myChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: uniqueValues,
+                        datasets: [{
+                            label: 'Record Count',
+                            data: getCounts(data, uniqueValues),
+                            backgroundColor: 'rgba(0, 123, 255, 0.5)'
+                        }]
+                    },
+                    options: {
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+            };
+            // Initialize Line Chart
+            const initLineChart = (aggregatedData) => {
+                const ctx = document.getElementById('lineChart').getContext('2d');
+                window.lineChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: aggregatedData.labels,
+                        datasets: [{
+                            label: 'Data Over Time',
+                            data: aggregatedData.data,
+                            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                            borderColor: getRandomColor(),
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+            };
+            // Aggregate time series
+        const aggregateDataByTime = (data, timePeriod) => {
+            const aggregatedData = {};
+
+            data.forEach(row => {
+                // Assuming the date is in row[8] and in 'YYYY-MM-DD' format
+                const date = new Date(row[8]);
+                let label;
+
+                if (timePeriod === 'quarter') {
+                    const quarter = Math.floor(date.getMonth() / 3) + 1;
+                    label = `Q${quarter}-${date.getFullYear()}`;
+                } else { // 'year'
+                    label = date.getFullYear().toString();
+                }
+
+                if (!aggregatedData[label]) {
+                    aggregatedData[label] = 0;
+                }
+                aggregatedData[label]++; // Increment count, adjust based on what you're counting
+            });
+            console.log(Object.keys(aggregatedData));
+            console.log(Object.values(aggregatedData));
+        return {
+            labels: Object.keys(aggregatedData),
+            data: Object.values(aggregatedData)
+        };
+    };
+    const updateChart = (data) => {
+        // Determine selected column and time period
+        let selectedColumn = getSelectedColumns();
+        let timePeriod = document.querySelector('input[name="timeSeriesToggle"]:checked').value;
+
+        // Update bar chart
+        const uniqueValues = [...new Set(data.map(row => row[selectedColumn]))];
+        window.myChart.data.labels = uniqueValues;
+        window.myChart.data.datasets[0].data = getCounts(data, uniqueValues);
+        window.myChart.update();
+
+        // Update line chart
+        const aggregatedData = aggregateDataByTime(data, timePeriod);
+        window.lineChart.data.labels = aggregatedData.labels;
+        window.lineChart.data.datasets[0].data = aggregatedData.data;
+        window.lineChart.update();
+    };
+
+    const getCounts = (data, uniqueValues) => {
+        const startDate = new Date(document.getElementById('startDate').value);
+        const endDate = new Date(document.getElementById('endDate').value);
+        // get the column number of which column to use for the chart labels
+        let selectedValue = getSelectedColumns();
+        //console.log("Selected Value: " + selectedValue);
+
+            return uniqueValues.map(value => 
+                data.filter(row => {
+                    //console.log("unique " + selectedValue + " existing value? " + value);
+                    //console.log(row[selectedValue] + " " + value);
+                    return row[selectedValue] === value &&
+                        isCheckboxChecked(row[1], 'col2') && // Check for column 2 checkboxes
+                        isCheckboxChecked(row[2], 'col3') && // Check for column 3 checkboxes
+                        isCheckboxChecked(row[3], 'col4') && // Check for column 3 checkboxes
+                        new Date(row[8]) >= startDate &&
+                        new Date(row[8]) <= endDate;
+                }).length
+            );
+        };
+
+        // const isColumn3Checked = (value) => {
+        //     const checkbox = document.getElementById(value);
+        //     return checkbox ? checkbox.checked : true;
+        //};
+
+        // New function to filter data by date and update chart
+        window.filterByDate = () => {
+            const rows = window.csvData; // Assuming csvData is stored globally
+            updateChart(rows);
+            };
+            window.filterByType = () => {
+            const rows = window.csvData; // Assuming csvData is stored globally
+            updateChart(rows);
+        };
+        // Function to generate a random color
+        const getRandomColor = () => {
+            const letters = '0123456789ABCDEF';
+            let color = '#';
+            for (let i = 0; i < 6; i++) {
+                color += letters[Math.floor(Math.random() * 16)];
+            }
+            return color;
+        };
+        // Modify processCSVData to store CSV data globally
+        const processCSVData = (csvText) => {
+            const rows = csvText.split('\n').map(row => row.split(','));
+            window.csvData = rows; // Store the CSV data globally
+            processData(rows);
+            };
+
+        function getSelectedColumns() {
+            let radios = document.querySelectorAll('input[name="columnSelect"]');
+            for (let radio of radios) {
+                if (radio.checked) {
+                    return radio.value;
+                }
+            }
+            return null; // or a default value if none is selected
+        }
+
+            
+    });
+
+    </script>
+
+</head>
+<body>
+    <div>
+        <label for="startDate">Start Date:</label>
+        <input type="date" value="2023-01-01" id="startDate" name="startDate">
+        <label for="endDate">End Date:</label>
+        <input type="date" value="2023-12-31" id="endDate" name="endDate">
+        <button onclick="filterByDate()">Filter</button>
+        <br /><br />
+        <input onclick="filterByType()" type="radio" id="value1" checked="checked" name="columnSelect" value="1">
+        <label for="value1">Col 1</label><br>
+
+        <input onclick="filterByType()" type="radio" id="value2" name="columnSelect" value="2">
+        <label for="value2">Col 2</label><br>
+
+        <input onclick="filterByType()" type="radio" id="value3" name="columnSelect" value="3">
+        <label for="value3">Col 3</label>
+        <input type="radio" name="timeSeriesToggle" value="quarter" checked="checked">Quarter
+        <input type="radio" name="timeSeriesToggle" value="year">Year
+    </div>
+    <div style="height: 600px; width: 600px">
+        <canvas id="myChart"></canvas>
+    </div>
+    <div style="height: 600px; width: 600px">
+        <canvas id="lineChart"></canvas>
+    </div>
+</body>
+</html>
